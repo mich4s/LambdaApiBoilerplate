@@ -1,0 +1,8 @@
+{
+  "type": "postgres",
+  "logging": true,
+  "migrations": ["./src/config/migrations/**/*.ts"],
+  "cli": {
+    "migrationsDir": "./src/config/migrations"
+  }
+}
