@@ -1,11 +1,9 @@
 import connection from '../config/typeorm';
 import { Connection } from 'typeorm';
-import createApi, { API, Request, Response } from 'lambda-api';
+import createApi, { API, NextFunction, Request, Response } from 'lambda-api';
 import { APIGatewayEvent, Context } from 'aws-lambda';
-import container from '../config/container';
-import * as urljoin from 'url-join';
-import { RequestMethod } from '../config/decorators';
-import { UsersController } from './controllers/UsersController';
+import { Container } from 'inversify';
+import { RouteManager, RegisteredControllerAction } from './core/RouteManager';
 
 export interface InitParams {
   repositories: any[];
@@ -18,19 +16,26 @@ export class App {
   private repositories: any[];
   private controllers: any[];
 
+  private container: Container;
+
   private api: API;
 
-  constructor() {
+  constructor(params: InitParams) {
     this.initialized = false;
-  }
 
-  async init(params: InitParams): Promise<App> {
-    if (this.initialized) {
-      return this;
-    }
+    this.container = new Container({
+      defaultScope: 'Singleton',
+      autoBindInjectable: true,
+    });
 
     this.repositories = params.repositories;
     this.controllers = params.controllers;
+  }
+
+  async init(): Promise<App> {
+    if (this.initialized) {
+      return this;
+    }
 
     await this.connectDatabase();
 
@@ -41,6 +46,7 @@ export class App {
   }
 
   async run(event: APIGatewayEvent, context: Context): Promise<any> {
+    await this.init();
     return this.api.run(event, context);
   }
 
@@ -49,7 +55,7 @@ export class App {
 
     // TODO this should be refactored to inject all repositories from directory without this hack
     for (const repository of this.repositories) {
-      container.bind(repository).toConstantValue(connection.getCustomRepository(repository));
+      this.container.bind(repository).toConstantValue(connection.getCustomRepository(repository));
     }
 
     return connection;
@@ -58,28 +64,28 @@ export class App {
   private createRouter(): API {
     const api: API = createApi({});
 
-    this.controllers.forEach((controller: any) => {
-      const controllerMethods: string[] = Object.getOwnPropertyNames(controller.prototype);
+    const routes = new RouteManager().register(this.controllers);
 
-      const controllerPath = Reflect.getMetadata('path', controller);
-
-      controllerMethods.forEach((methodName: string) => {
-        if (methodName === 'constructor') {
-          return;
-        }
-
-        const actionPath = Reflect.getMetadata('path', controller.prototype[methodName]);
-        const actionMethod: RequestMethod = Reflect.getMetadata('method', controller.prototype[methodName]);
-
-        if (!actionMethod || !actionPath) {
-          return;
-        }
-
-        api.METHOD(actionMethod, urljoin(controllerPath, actionPath), (request: Request, response: Response) => {
-          return container.resolve(controller)[methodName](request);
-        });
+    routes.forEach((route: RegisteredControllerAction) => {
+      api.METHOD(route.method, route.path, (request: Request, response: Response) => {
+        return this.container.resolve(route.controller)[route.methodName](request);
       });
     });
+
+    // api.use((error: Error, _request: Request, response: Response, next: NextFunction) => {
+    //   console.log('test');
+    //   console.log(error);
+    //   console.log('test');
+    //   // onst errorResponse = ErrorHandlerMiddleware.prepareErrorResponse(error);
+    //   //
+    //   // response.status(errorResponse.statusCode);
+    //   // response.send({
+    //   //                 error: true,
+    //   //                 data: errorResponse.data,
+    //   //               });
+    //
+    //   next();
+    // });
 
     this.api = api;
 

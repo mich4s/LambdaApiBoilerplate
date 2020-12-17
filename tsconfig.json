@@ -16,7 +16,8 @@
     "lib": [
       "es2017",
       "es6"
-    ]
+    ],
+    "allowSyntheticDefaultImports": true
   },
   "include": [
     "src/**/*",

@@ -4,13 +4,11 @@ import { App } from '../App';
 import { UsersRepository } from '../repositories/UsersRepository';
 import { UsersController } from '../controllers/UsersController';
 
-const app: App = new App();
+const app: App = new App({
+  controllers: [UsersController],
+  repositories: [UsersRepository],
+});
 
 export async function handler(event: APIGatewayEvent, context) {
-  await app.init({
-    controllers: [UsersController],
-    repositories: [UsersRepository],
-  });
-
   return await app.run(event, context);
 }

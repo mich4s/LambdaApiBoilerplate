@@ -11,7 +11,6 @@ export class UsersController {
 
   @Get()
   async show(request: Request) {
-    console.log(request.path);
     this.logger.info('Showing user');
     return this.usersService.show();
   }
