@@ -1,16 +1,22 @@
 import connection from '../config/typeorm';
 import { Connection } from 'typeorm';
-import createApi, { API } from 'lambda-api';
-import { router } from '../config/router';
+import createApi, { API, Request, Response } from 'lambda-api';
 import { APIGatewayEvent, Context } from 'aws-lambda';
 import container from '../config/container';
+import * as urljoin from 'url-join';
+import { RequestMethod } from '../config/decorators';
+import { UsersController } from './controllers/UsersController';
 
 export interface InitParams {
   repositories: any[];
+  controllers: any[];
 }
 
 export class App {
   private initialized: boolean;
+
+  private repositories: any[];
+  private controllers: any[];
 
   private api: API;
 
@@ -23,7 +29,10 @@ export class App {
       return this;
     }
 
-    await this.connectDatabase(params.repositories);
+    this.repositories = params.repositories;
+    this.controllers = params.controllers;
+
+    await this.connectDatabase();
 
     this.createRouter();
 
@@ -35,11 +44,11 @@ export class App {
     return this.api.run(event, context);
   }
 
-  private async connectDatabase(repositories: any[]): Promise<Connection> {
+  private async connectDatabase(): Promise<Connection> {
     await connection.connect();
 
     // TODO this should be refactored to inject all repositories from directory without this hack
-    for (const repository of repositories) {
+    for (const repository of this.repositories) {
       container.bind(repository).toConstantValue(connection.getCustomRepository(repository));
     }
 
@@ -49,7 +58,28 @@ export class App {
   private createRouter(): API {
     const api: API = createApi({});
 
-    router(api);
+    this.controllers.forEach((controller: any) => {
+      const controllerMethods: string[] = Object.getOwnPropertyNames(controller.prototype);
+
+      const controllerPath = Reflect.getMetadata('path', controller);
+
+      controllerMethods.forEach((methodName: string) => {
+        if (methodName === 'constructor') {
+          return;
+        }
+
+        const actionPath = Reflect.getMetadata('path', controller.prototype[methodName]);
+        const actionMethod: RequestMethod = Reflect.getMetadata('method', controller.prototype[methodName]);
+
+        if (!actionMethod || !actionPath) {
+          return;
+        }
+
+        api.METHOD(actionMethod, urljoin(controllerPath, actionPath), (request: Request, response: Response) => {
+          return container.resolve(controller)[methodName](request);
+        });
+      });
+    });
 
     this.api = api;
 

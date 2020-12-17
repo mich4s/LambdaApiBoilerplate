@@ -1,17 +1,22 @@
 import { injectable } from 'inversify';
 import { UsersService } from '../services/UsersService';
 import { Logger } from '../helpers/Logger';
+import { Controller, Get } from '../../config/decorators';
+import { Request } from 'lambda-api';
 
 @injectable()
+@Controller('users')
 export class UsersController {
   constructor(private usersService: UsersService, private logger: Logger) {}
 
-  public async show() {
+  @Get()
+  async show(request: Request) {
+    console.log(request.path);
     this.logger.info('Showing user');
     return this.usersService.show();
   }
 
-  public async show2() {
+  async show2() {
     return 2;
   }
 }

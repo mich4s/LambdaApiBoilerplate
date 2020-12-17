@@ -19,6 +19,7 @@
     "sqlite3": "^5.0.0",
     "ts-lambda-api": "^2.2.2",
     "typeorm": "^0.2.29",
+    "url-join": "^4.0.1",
     "uuid": "^8.3.2",
     "winston": "^3.3.3"
   },
